@@ -5,8 +5,6 @@ import time
 streamlit.set_page_config(page_title="PulseGuard AI - Ward Dashboard", layout="wide")
 
 # --- 1. Generate 1000 Patient Records ---
-# We use a fixed random seed here so that when a new tab opens (creating a new session),
-# the generated patient database remains exactly identical across all browser tabs.
 if "patient_registry" not in streamlit.session_state:
     current_random_state = random.getstate()
     random.seed(42) # Lock seed for consistent multi-tab generation
@@ -26,7 +24,6 @@ if "patient_registry" not in streamlit.session_state:
             if patient_count >= 1000:
                 break
             
-            # Risk profile stratification
             profile_chance = random.random()
             if profile_chance < 0.85:
                 profile = "Stable"
@@ -62,7 +59,7 @@ if "patient_registry" not in streamlit.session_state:
             break
             
     streamlit.session_state.patient_registry = registry
-    random.setstate(current_random_state) # Restore normal randomness for telemetry
+    random.setstate(current_random_state) 
 
 # --- 2. Triage Logic Engine ---
 def calculate_severity(spo2, heart_rate, bp_sys, bp_dia):
@@ -101,7 +98,6 @@ def generate_patient_vitals(profile):
         return {"spo2": random.randint(88, 99), "hr": random.randint(45, 130), "bp_sys": random.randint(100, 185), "bp_dia": random.randint(60, 115)}
 
 # --- 4. APP ROUTING LOGIC ---
-# Check if the URL has a "patient_id" query parameter (meaning a new tab was opened)
 url_params = streamlit.query_params
 
 if "patient_id" in url_params:
@@ -112,44 +108,67 @@ if "patient_id" in url_params:
     patient_data = next((p for p in streamlit.session_state.patient_registry if p["id"] == target_id), None)
     
     if patient_data:
-        # Top Navigation Button
-        if streamlit.button("← Return to Main Ward"):
+        # Navigation
+        if streamlit.button("← Close and Return to Main Ward"):
             streamlit.query_params.clear()
             streamlit.rerun()
             
-        streamlit.title(f"🏥 {patient_data['name']} - Medical Record")
+        # 1. Professional Header
+        col_head1, col_head2 = streamlit.columns([3, 1])
+        with col_head1:
+            streamlit.title(f"🏥 {patient_data['name']}")
+            streamlit.subheader(f"Patient ID: {patient_data['id']} | Age: {patient_data['age']} | Gender: {patient_data['gender']}")
+        with col_head2:
+            streamlit.markdown(f"<h1 style='text-align: right; color: #dc3545; font-size: 3.5rem; margin: 0;'>{patient_data['blood_group']}</h1>", unsafe_allow_html=True)
+            streamlit.markdown(f"<p style='text-align: right; margin: 0; color: gray; font-size: 1.2rem;'>Blood Group</p>", unsafe_allow_html=True)
         
-        ehr_card_html = f"""
-        <div style="background-color: #1e1e1e; padding: 30px; border-radius: 12px; border-left: 8px solid #17a2b8; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-top: 20px;">
-            <h2 style="margin-top: 0; color: #17a2b8; margin-bottom: 5px;">Patient ID: {patient_data['id']}</h2>
-            <hr style="border-color: #444; margin-bottom: 25px;">
-            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+        streamlit.divider()
+        
+        # 2. Individual Live Telemetry Dashboard
+        streamlit.markdown("### 📡 Live Vitals Stream")
+        
+        @streamlit.fragment(run_every=2)
+        def render_individual_vitals():
+            vitals = generate_patient_vitals(patient_data["condition"])
+            spo2_data, hr_data, bp_data = calculate_severity(vitals["spo2"], vitals["hr"], vitals["bp_sys"], vitals["bp_dia"])
+            
+            spo2_text = "black" if spo2_data[0] == "#ffc107" else "white"
+            hr_text = "black" if hr_data[0] == "#ffc107" else "white"
+            bp_text = "black" if bp_data[0] == "#ffc107" else "white"
+
+            vcol1, vcol2, vcol3 = streamlit.columns(3)
+            with vcol1:
+                streamlit.markdown(f"<div style='background-color: {spo2_data[0]}; color: {spo2_text}; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'><h3 style='margin:0;'>Blood Oxygen (SpO2)</h3><h1 style='margin:10px 0 0 0; font-size: 3rem;'>{vitals['spo2']}%</h1></div>", unsafe_allow_html=True)
+            with vcol2:
+                streamlit.markdown(f"<div style='background-color: {hr_data[0]}; color: {hr_text}; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'><h3 style='margin:0;'>Heart Rate</h3><h1 style='margin:10px 0 0 0; font-size: 3rem;'>{vitals['hr']} BPM</h1></div>", unsafe_allow_html=True)
+            with vcol3:
+                streamlit.markdown(f"<div style='background-color: {bp_data[0]}; color: {bp_text}; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'><h3 style='margin:0;'>Blood Pressure</h3><h1 style='margin:10px 0 0 0; font-size: 3rem;'>{vitals['bp_sys']}/{vitals['bp_dia']}</h1></div>", unsafe_allow_html=True)
                 
-                <div style="flex: 1; min-width: 300px; margin-bottom: 20px; border-right: 1px solid #444; padding-right: 20px;">
-                    <h3 style="color: #ccc; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px;">Demographics & Contact</h3>
-                    <p style="font-size: 1.1rem; line-height: 1.6;">
-                    <b>Age / Gender:</b> {patient_data['age']} yrs, {patient_data['gender']}<br>
-                    <b>Blood Group:</b> <span style="color: #dc3545; font-weight: bold; font-size: 1.2rem;">{patient_data['blood_group']}</span><br>
-                    <b>Mobile (Primary):</b> {patient_data['contact']}<br>
-                    <b>Email Address:</b> {patient_data['email']}<br>
-                    <b>Emergency Contact:</b> <span style="color: #ffc107;">{patient_data['emergency_contact']}</span>
-                    </p>
-                </div>
-    
-                <div style="flex: 1; min-width: 300px; margin-bottom: 20px; padding-left: 20px;">
-                    <h3 style="color: #ccc; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px;">Clinical Profile</h3>
-                    <p style="font-size: 1.1rem; line-height: 1.6;">
-                    <b>Known Allergies:</b> <span style="color: #ffc107; font-weight: bold;">{patient_data['allergies']}</span><br>
-                    <b>Previous Medical History:</b> <br><span style="color: #fff;">{patient_data['history']}</span><br><br>
-                    <b>Current Medications:</b> <br><span style="color: #fff;">{patient_data['medications']}</span><br><br>
-                    <b>System Risk Assessment:</b> {patient_data['condition']}
-                    </p>
-                </div>
-    
-            </div>
-        </div>
-        """
-        streamlit.markdown(ehr_card_html, unsafe_allow_html=True)
+        render_individual_vitals()
+        
+        streamlit.divider()
+
+        # 3. Clinical Profile and Contact Layout
+        info_col1, info_col2 = streamlit.columns(2)
+        
+        with info_col1:
+            streamlit.subheader("📋 Clinical Profile")
+            streamlit.info(f"**System Risk Assessment:** {patient_data['condition']}")
+            streamlit.warning(f"**Known Allergies:** {patient_data['allergies']}")
+            
+            streamlit.markdown(f"""
+            * **Previous Medical History:** {patient_data['history']}
+            * **Current Medications:** {patient_data['medications']}
+            """)
+
+        with info_col2:
+            streamlit.subheader("📞 Contact Information")
+            streamlit.markdown(f"""
+            * **📱 Primary Mobile:** {patient_data['contact']}
+            * **✉️ Email Address:** {patient_data['email']}
+            """)
+            streamlit.error(f"**🚨 Emergency Contact:** {patient_data['emergency_contact']}")
+            
     else:
         streamlit.error("Patient Record Not Found.")
         
@@ -181,7 +200,6 @@ else:
             bp_text = "black" if bp_data[0] == "#ffc107" else "white"
             overall_text = "black" if overall_color == "#ffc107" else "white"
 
-            # The Patient Name is now a clickable HTML link opening a new tab
             row = (
                 f"<tr>"
                 f"<td style='padding: 8px; border: 1px solid #555;'>{patient['id']}</td>"
