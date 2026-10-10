@@ -2,11 +2,10 @@ import streamlit
 import random
 import time
 
-streamlit.set_page_config(page_title="PulseGuard AI - 1000 Patient Mega Ward", layout="wide")
+streamlit.set_page_config(page_title="PulseGuard AI - Priority Triage Ward", layout="wide")
 
 # --- 1. Generate 1000 Patients (Runs only once on startup) ---
 if "patient_registry" not in streamlit.session_state:
-    # First names (36) x Last names (35) = 1,260 possible combinations
     first_names = ["James", "Mary", "John", "Patricia", "Robert", "Jennifer", "Michael", "Linda", "William", "Elizabeth", "David", "Barbara", "Richard", "Susan", "Joseph", "Jessica", "Thomas", "Sarah", "Charles", "Karen", "Christopher", "Nancy", "Daniel", "Lisa", "Matthew", "Betty", "Anthony", "Margaret", "Mark", "Sandra", "Donald", "Ashley", "Steven", "Kimberly", "Paul", "Emily"]
     last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson", "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson", "Walker", "Young", "Allen", "King", "Wright"]
     
@@ -18,7 +17,7 @@ if "patient_registry" not in streamlit.session_state:
             if patient_count >= 1000:
                 break
             
-            # Assign risk profiles. Mostly stable, but about 15% are high-risk.
+            # Assign risk profiles. Mostly stable, but some are high-risk.
             profile_chance = random.random()
             if profile_chance < 0.85:
                 profile = "Stable"
@@ -82,19 +81,19 @@ def generate_patient_vitals(profile):
         return {"spo2": random.randint(88, 99), "hr": random.randint(45, 130), "bp_sys": random.randint(100, 185), "bp_dia": random.randint(60, 115)}
 
 # --- 4. UI and Dashboard Assembly ---
-streamlit.title("PulseGuard AI - 1000 Patient Monitor")
-streamlit.write("Real-time visual triage calculating continuous data for 1,000 patients simultaneously.")
+streamlit.title("PulseGuard AI - Priority Triage Ward")
+streamlit.write("Dynamically sorted telemetry. Critical patients are systematically pushed to the top of the queue.")
 
 # Auto-refreshing block for continuous readings
 @streamlit.fragment(run_every=2)
 def render_live_ward_table():
     
-    html_rows = []
-    total_stable = 0
-    total_warning = 0
-    total_critical = 0
+    # 1. Define three separate arrays to sort the patients by severity
+    critical_rows = []
+    warning_rows = []
+    normal_rows = []
 
-    # 1. Process all 1000 patients in the background
+    # 2. Process all 1000 patients in the background
     for patient in streamlit.session_state.patient_registry:
         vitals = generate_patient_vitals(patient["condition"])
         
@@ -105,13 +104,10 @@ def render_live_ward_table():
         all_labels = [spo2_data[1], hr_data[1], bp_data[1]]
         if "CRITICAL" in all_labels:
             overall_color, overall_status = "#dc3545", "CRITICAL"
-            total_critical += 1
         elif "WARNING" in all_labels:
             overall_color, overall_status = "#ffc107", "WARNING"
-            total_warning += 1
         else:
             overall_color, overall_status = "#28a745", "NORMAL"
-            total_stable += 1
 
         spo2_text = "black" if spo2_data[0] == "#ffc107" else "white"
         hr_text = "black" if hr_data[0] == "#ffc107" else "white"
@@ -130,18 +126,26 @@ def render_live_ward_table():
             f"<td style='padding: 10px; border: 1px solid #555; background-color: {overall_color}; color: {overall_text}; font-weight: bold;'>{overall_status}</td>"
             f"</tr>"
         )
-        html_rows.append(row)
+        
+        # 3. Sort into respective lists instead of one massive array
+        if overall_status == "CRITICAL":
+            critical_rows.append(row)
+        elif overall_status == "WARNING":
+            warning_rows.append(row)
+        else:
+            normal_rows.append(row)
 
-    # 2. Render Live Summary Metrics above the table
+    # 4. Render Live Summary Metrics above the table
+    # Notice we swapped the metric order to highlight Critical first
     col1, col2, col3 = streamlit.columns(3)
     with col1:
-        streamlit.metric("🟢 STABLE PATIENTS", total_stable)
+        streamlit.metric("🔴 CRITICAL EMERGENCIES", len(critical_rows))
     with col2:
-        streamlit.metric("🟡 WARNING STATUS", total_warning)
+        streamlit.metric("🟡 WARNING STATUS", len(warning_rows))
     with col3:
-        streamlit.metric("🔴 CRITICAL EMERGENCIES", total_critical)
+        streamlit.metric("🟢 STABLE PATIENTS", len(normal_rows))
 
-    # 3. Assemble the scrollable table
+    # 5. Assemble the scrollable table
     table_header = """
     <div style="max-height: 600px; overflow-y: auto; border: 2px solid #555; border-radius: 5px;">
         <table style="width: 100%; text-align: center; border-collapse: collapse; font-family: sans-serif;">
@@ -165,10 +169,10 @@ def render_live_ward_table():
     </div>
     """
 
-    # Inject the HTML (using .join is much faster for 1000 rows than adding strings one by one)
-    complete_html = table_header + "".join(html_rows) + table_footer
+    # 6. Concatenate the lists in prioritized order: Critical -> Warning -> Normal
+    complete_html = table_header + "".join(critical_rows) + "".join(warning_rows) + "".join(normal_rows) + table_footer
     streamlit.markdown(complete_html, unsafe_allow_html=True)
-    streamlit.caption(f"1,000 Data Streams Synchronized at: {time.strftime('%H:%M:%S')}")
+    streamlit.caption(f"1,000 Data Streams Synchronized and Sorted at: {time.strftime('%H:%M:%S')}")
 
 # Execute
 render_live_ward_table()
