@@ -1,167 +1,164 @@
 import streamlit
 import random
 import time
-import smtplib
-from email.message import EmailMessage
 
-# --- 1. Configuration & State ---
-streamlit.set_page_config(page_title="PulseGuard AI", layout="wide")
+streamlit.set_page_config(page_title="PulseGuard AI - Ward Overview", layout="wide")
 
-# Persistent session state for historical trends and SMS cooldown tracking
-if "vital_history" not in streamlit.session_state:
-    streamlit.session_state.vital_history = {
-        "heart_rate": [],
-        "spo2": [],
-        "bp_sys": []
-    }
-if "last_sms_time" not in streamlit.session_state:
-    streamlit.session_state.last_sms_time = 0
+# --- 1. Patient Database & Triage Logic ---
 
-# --- 2. SMS Alert Gateway ---
-def dispatch_emergency_sms(alert_reason, carrier_domain, phone_number):
-    """Sends an SMS alert via carrier email gateways with a 60-second cooldown."""
-    current_time = time.time()
-    cooldown_period = 60  # Wait 60 seconds between SMS texts
-    
-    if current_time - streamlit.session_state.last_sms_time < cooldown_period:
-        return  # Cooldown active, skip sending
-        
-    sender_email = "your_prototype_email@gmail.com"  # Replace with your Gmail
-    sender_password = "your_16_digit_app_password"   # Replace with Google App Password
-    
-    # Construct the SMS gateway address (e.g., 5551234567@txt.att.net)
-    recipient_address = f"{phone_number}@{carrier_domain}"
+# A static list of patients to simulate a hospital ward or clinic
+PATIENT_REGISTRY = [
+    {"name": "James Holden", "age": 42, "condition_profile": "Stable"},
+    {"name": "Naomi Nagata", "age": 36, "condition_profile": "Stable"},
+    {"name": "Amos Burton", "age": 45, "condition_profile": "Hypertension Risk"},
+    {"name": "Alex Kamal", "age": 52, "condition_profile": "Hypoxia Risk"},
+    {"name": "Chrisjen Avasarala", "age": 70, "condition_profile": "Volatile"}
+]
 
-    message = EmailMessage()
-    # SMS messages should be brief
-    message.set_content(f"PULSEGUARD ALERT: Patient Critical.\nReason: {alert_reason}")
-    message['Subject'] = "URGENT"
-    message['From'] = sender_email
-    message['To'] = recipient_address
-
-    try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(sender_email, sender_password)
-        server.send_message(message)
-        server.quit()
-        
-        streamlit.session_state.last_sms_time = current_time
-        streamlit.toast(f"SMS Text Dispatched to Doctor! ({alert_reason})", icon="📱")
-    except Exception as error_message:
-        streamlit.toast(f"Failed to send SMS: {error_message}", icon="⚠️")
-
-# --- 3. Triage Logic Engine ---
-def calculate_severity(spo2, heart_rate, bp_systolic, bp_diastolic):
-    """Evaluates vitals and returns color hex codes and string labels."""
+def calculate_severity(spo2, heart_rate, bp_sys, bp_dia):
+    """Evaluates individual vitals and returns the appropriate hex color and label."""
+    # SpO2 Logic
     if spo2 < 90:
-        spo2_info = ("#dc3545", "CRITICAL")
+        spo2_color, spo2_label = "#dc3545", "CRITICAL"  # Red
     elif 90 <= spo2 <= 94:
-        spo2_info = ("#ffc107", "WARNING")
+        spo2_color, spo2_label = "#ffc107", "WARNING"   # Yellow
     else:
-        spo2_info = ("#28a745", "NORMAL")
+        spo2_color, spo2_label = "#28a745", "NORMAL"    # Green
 
+    # Heart Rate Logic
     if heart_rate < 50 or heart_rate >= 120:
-        hr_info = ("#dc3545", "CRITICAL")
+        hr_color, hr_label = "#dc3545", "CRITICAL"
     elif (50 <= heart_rate <= 59) or (101 <= heart_rate <= 119):
-        hr_info = ("#ffc107", "WARNING")
+        hr_color, hr_label = "#ffc107", "WARNING"
     else:
-        hr_info = ("#28a745", "NORMAL")
+        hr_color, hr_label = "#28a745", "NORMAL"
 
-    if bp_systolic >= 180 or bp_diastolic >= 110:
-        bp_info = ("#dc3545", "CRITICAL")
-    elif (120 <= bp_systolic <= 179) or (80 <= bp_diastolic <= 109):
-        bp_info = ("#ffc107", "WARNING")
+    # Blood Pressure Logic
+    if bp_sys >= 180 or bp_dia >= 110:
+        bp_color, bp_label = "#dc3545", "CRITICAL"
+    elif (120 <= bp_sys <= 179) or (80 <= bp_dia <= 109):
+        bp_color, bp_label = "#ffc107", "WARNING"
     else:
-        bp_info = ("#28a745", "NORMAL")
+        bp_color, bp_label = "#28a745", "NORMAL"
 
-    return spo2_info, hr_info, bp_info
+    return (spo2_color, spo2_label), (hr_color, hr_label), (bp_color, bp_label)
 
-# --- 4. Simulated Data Engine ---
-def generate_telemetry(profile_mode):
-    """Generates continuous stream payloads based on testing profile."""
-    if profile_mode == "Normal Profile":
-        return {"spo2": random.randint(96, 100), "hr": random.randint(65, 82), "bp_sys": random.randint(110, 118), "bp_dia": random.randint(70, 78)}
-    elif profile_mode == "Critical Hypoxia Event":
-        return {"spo2": random.randint(82, 88), "hr": random.randint(115, 135), "bp_sys": random.randint(125, 140), "bp_dia": random.randint(82, 90)}
-    elif profile_mode == "Hypertensive Crisis Event":
-        return {"spo2": random.randint(94, 97), "hr": random.randint(105, 128), "bp_sys": random.randint(182, 205), "bp_dia": random.randint(112, 125)}
+# --- 2. Simulated Telemetry Engine ---
 
-# --- 5. Dashboard UI ---
-streamlit.title("PulseGuard AI - Real-Time Vitals & SMS Alerts")
+def generate_patient_vitals(profile):
+    """Generates continuous stream payloads based on the patient's underlying risk profile."""
+    if profile == "Stable":
+        return {
+            "spo2": random.randint(96, 100),
+            "hr": random.randint(60, 85),
+            "bp_sys": random.randint(110, 118),
+            "bp_dia": random.randint(70, 78)
+        }
+    elif profile == "Hypoxia Risk":
+        # Simulates a patient struggling with oxygen levels
+        return {
+            "spo2": random.randint(85, 93),
+            "hr": random.randint(95, 115),
+            "bp_sys": random.randint(120, 135),
+            "bp_dia": random.randint(80, 90)
+        }
+    elif profile == "Hypertension Risk":
+        # Simulates a patient with dangerously high blood pressure
+        return {
+            "spo2": random.randint(95, 99),
+            "hr": random.randint(80, 105),
+            "bp_sys": random.randint(165, 190),
+            "bp_dia": random.randint(95, 115)
+        }
+    else:  # Volatile / Random
+        return {
+            "spo2": random.randint(88, 99),
+            "hr": random.randint(45, 130),
+            "bp_sys": random.randint(100, 185),
+            "bp_dia": random.randint(60, 115)
+        }
 
-# Sidebar Configuration
-streamlit.sidebar.header("Data Stream Controls")
-simulation_profile = streamlit.sidebar.selectbox("Active Patient Condition", ["Normal Profile", "Critical Hypoxia Event", "Hypertensive Crisis Event"])
+# --- 3. UI and Dashboard Assembly ---
 
-streamlit.sidebar.markdown("---")
-streamlit.sidebar.header("SMS Alert Configuration")
-enable_sms = streamlit.sidebar.checkbox("Enable Automatic SMS Alerts", value=False)
-doctor_phone = streamlit.sidebar.text_input("Doctor Phone Number (No dashes)", "5551234567")
-# Dictionary mapping carrier names to their email-to-sms domains
-carrier_mapping = {
-    "Verizon": "vtext.com",
-    "AT&T": "txt.att.net",
-    "T-Mobile": "tmomail.net",
-    "Sprint": "messaging.sprintpcs.com"
-}
-selected_carrier = streamlit.sidebar.selectbox("Mobile Carrier", list(carrier_mapping.keys()))
-carrier_domain = carrier_mapping[selected_carrier]
+streamlit.title("PulseGuard AI - Multi-Patient Ward")
+streamlit.write("Continuous visual triage for multiple patients. Color indicators shift instantly based on vital thresholds.")
 
-# Fragment rerun automatically simulates continuous incoming telemetry
+# Streamlit fragment auto-reruns the table every 2 seconds
 @streamlit.fragment(run_every=2)
-def render_live_vitals_panel():
-    data = generate_telemetry(simulation_profile)
+def render_live_ward_table():
     
-    # Track history
-    streamlit.session_state.vital_history["heart_rate"].append(data["hr"])
-    streamlit.session_state.vital_history["spo2"].append(data["spo2"])
-    streamlit.session_state.vital_history["bp_sys"].append(data["bp_sys"])
-    if len(streamlit.session_state.vital_history["heart_rate"]) > 20:
-        streamlit.session_state.vital_history["heart_rate"].pop(0)
-        streamlit.session_state.vital_history["spo2"].pop(0)
-        streamlit.session_state.vital_history["bp_sys"].pop(0)
-
-    spo2_info, hr_info, bp_info = calculate_severity(data["spo2"], data["hr"], data["bp_sys"], data["bp_dia"])
-
-    # Trigger SMS if enabled and any vital is CRITICAL
-    if enable_sms:
-        critical_events = []
-        if spo2_info[1] == "CRITICAL":
-            critical_events.append(f"SpO2 {data['spo2']}%")
-        if hr_info[1] == "CRITICAL":
-            critical_events.append(f"HR {data['hr']} BPM")
-        if bp_info[1] == "CRITICAL":
-            critical_events.append(f"BP {data['bp_sys']}/{data['bp_dia']}")
-            
-        if critical_events:
-            alert_reason_text = " | ".join(critical_events)
-            dispatch_emergency_sms(alert_reason_text, carrier_domain, doctor_phone)
-
-    # Render Cards
-    card_template = """
-    <div style="background-color: {bg_color}; border-radius: 12px; padding: 22px; text-align: center; color: white; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-        <h4 style="margin: 0; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem;">{title}</h4>
-        <h1 style="margin: 10px 0; font-size: 2.8rem; font-weight: bold;">{value} <span style="font-size: 1.2rem;">{unit}</span></h1>
-        <div style="background-color: rgba(0,0,0,0.25); display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: bold;">
-            {status}
-        </div>
-    </div>
+    # Begin building the HTML table structure
+    html_table = """
+    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+        <thead>
+            <tr style="background-color: #1e1e1e; color: #ffffff; border-bottom: 2px solid #333;">
+                <th style="padding: 15px;">Patient Name</th>
+                <th style="padding: 15px;">Age</th>
+                <th style="padding: 15px;">Blood Oxygen (SpO2)</th>
+                <th style="padding: 15px;">Heart Rate (BPM)</th>
+                <th style="padding: 15px;">Blood Pressure (mmHg)</th>
+                <th style="padding: 15px;">Overall Triage Status</th>
+            </tr>
+        </thead>
+        <tbody>
     """
 
-    col1, col2, col3 = streamlit.columns(3)
-    with col1:
-        streamlit.markdown(card_template.format(bg_color=spo2_info[0], title="SpO2", value=data["spo2"], unit="%", status=spo2_info[1]), unsafe_allow_html=True)
-    with col2:
-        streamlit.markdown(card_template.format(bg_color=hr_info[0], title="Heart Rate", value=data["hr"], unit="BPM", status=hr_info[1]), unsafe_allow_html=True)
-    with col3:
-        streamlit.markdown(card_template.format(bg_color=bp_info[0], title="Blood Pressure", value=f"{data['bp_sys']}/{data['bp_dia']}", unit="mmHg", status=bp_info[1]), unsafe_allow_html=True)
+    # Iterate through each patient and generate their live row
+    for patient in PATIENT_REGISTRY:
+        vitals = generate_patient_vitals(patient["condition_profile"])
+        
+        # Calculate severity colors and labels
+        spo2_data, hr_data, bp_data = calculate_severity(
+            vitals["spo2"], vitals["hr"], vitals["bp_sys"], vitals["bp_dia"]
+        )
+        
+        # Determine the worst-case scenario for the patient's overall status
+        all_labels = [spo2_data[1], hr_data[1], bp_data[1]]
+        if "CRITICAL" in all_labels:
+            overall_color = "#dc3545" # Red
+            overall_status = "CRITICAL"
+        elif "WARNING" in all_labels:
+            overall_color = "#ffc107" # Yellow
+            overall_status = "WARNING"
+        else:
+            overall_color = "#28a745" # Green
+            overall_status = "NORMAL"
 
-    # Render History Chart
-    streamlit.subheader("Live Vitals Progression")
-    streamlit.line_chart({
-        "Heart Rate (BPM)": streamlit.session_state.vital_history["heart_rate"],
-        "SpO2 (%)": streamlit.session_state.vital_history["spo2"],
-        "Systolic BP (mmHg)": streamlit.session_state.vital_history["bp_sys"]
-    })
+        # Determine text colors based on background (black text for yellow backgrounds for readability)
+        spo2_text_color = "black" if spo2_data[0] == "#ffc107" else "white"
+        hr_text_color = "black" if hr_data[0] == "#ffc107" else "white"
+        bp_text_color = "black" if bp_data[0] == "#ffc107" else "white"
+        overall_text_color = "black" if overall_color == "#ffc107" else "white"
 
-render_live_vitals_panel()
+        # Append the row HTML
+        html_table += f"""
+            <tr style="border-bottom: 1px solid #444; background-color: #2b2b2b; color: white;">
+                <td style="padding: 12px; font-weight: bold;">{patient["name"]}</td>
+                <td style="padding: 12px;">{patient["age"]}</td>
+                <td style="padding: 12px; background-color: {spo2_data[0]}; color: {spo2_text_color}; font-weight: bold; font-size: 1.1rem;">
+                    {vitals["spo2"]}%
+                </td>
+                <td style="padding: 12px; background-color: {hr_data[0]}; color: {hr_text_color}; font-weight: bold; font-size: 1.1rem;">
+                    {vitals["hr"]}
+                </td>
+                <td style="padding: 12px; background-color: {bp_data[0]}; color: {bp_text_color}; font-weight: bold; font-size: 1.1rem;">
+                    {vitals["bp_sys"]}/{vitals["bp_dia"]}
+                </td>
+                <td style="padding: 12px; background-color: {overall_color}; color: {overall_text_color}; font-weight: bold; font-size: 1.2rem; letter-spacing: 1px;">
+                    {overall_status}
+                </td>
+            </tr>
+        """
+
+    # Close the HTML table
+    html_table += """
+        </tbody>
+    </table>
+    """
+
+    # Render the custom table directly into Streamlit
+    streamlit.markdown(html_table, unsafe_allow_html=True)
+    streamlit.caption(f"Continuous Data Stream Synced: {time.strftime('%H:%M:%S')}")
+
+# Execute the live update function
+render_live_ward_table()
