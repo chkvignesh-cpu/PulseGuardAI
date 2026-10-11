@@ -4,10 +4,10 @@ import time
 
 streamlit.set_page_config(page_title="PulseGuard AI - Ward Dashboard", layout="wide")
 
-# --- 1. Generate 1000 Patient Records ---
+# --- 1. Generate 200 Patient Records ---
 if "patient_registry" not in streamlit.session_state:
     current_random_state = random.getstate()
-    random.seed(42) # Lock seed for consistent multi-tab generation
+    random.seed(42) 
     
     first_names = ["Aarav", "Vivaan", "Aditya", "Vihaan", "Arjun", "Sai", "Reyansh", "Ayaan", "Krishna", "Ishaan", "Shaurya", "Atharv", "Dhruv", "Kabir", "Rudra", "Diya", "Saanvi", "Ananya", "Aadhya", "Pari", "Anika", "Navya", "Angel", "Myra", "Sara", "Ira", "Riya", "Aarohi", "Anvi", "Prisha"]
     last_names = ["Sharma", "Verma", "Patel", "Reddy", "Rao", "Nair", "Iyer", "Kulkarni", "Deshmukh", "Mehta", "Gupta", "Singh", "Kumar", "Chopra", "Bose", "Chatterjee", "Banerjee", "Pillai", "Menon", "Joshi", "Bhat", "Hegde", "Shetty", "Gowda", "Naidu", "Chowdhury", "Das", "Dutta", "Mukherjee", "Sen", "Malhotra", "Kapoor", "Khanna", "Saxena"]
@@ -21,7 +21,7 @@ if "patient_registry" not in streamlit.session_state:
     
     for first in first_names:
         for last in last_names:
-            if patient_count >= 1000:
+            if patient_count >= 200:
                 break
             
             profile_chance = random.random()
@@ -55,7 +55,7 @@ if "patient_registry" not in streamlit.session_state:
             })
             patient_count += 1
             
-        if patient_count >= 1000:
+        if patient_count >= 200:
             break
             
     streamlit.session_state.patient_registry = registry
@@ -177,7 +177,7 @@ else:
     # ROUTE B: MAIN LIVE WARD DASHBOARD (DEFAULT VIEW)
     # =================================================================
     streamlit.title("PulseGuard AI - Priority Triage Ward")
-    streamlit.write("Click on any **Patient Name** (in blue) to open their full Electronic Health Record in a new tab.")
+    streamlit.write("Click on any **Patient Name** (in blue) to open their full Electronic Health Record in a new tab. Currently tracking **200 Patients**.")
 
     @streamlit.fragment(run_every=2)
     def render_live_ward_table():
